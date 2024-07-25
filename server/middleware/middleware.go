@@ -3,8 +3,10 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/alphadev97.com/go-csrf/db"
 	"github.com/alphadev97.com/go-csrf/server/middleware/myJwt"
 	"github.com/alphadev97.com/go-csrf/server/templates"
 	"github.com/justinas/alice"
@@ -51,10 +53,38 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	case "/register":
 		switch r.Method {
 		case "GET":
+			templates.RenderTemplate(w, "register", &templates.RegisterPage{false, ""})
 		case "POST":
+			r.ParseForm()
+			log.Println(r.Form)
+
+			_, uuid, err := db.FetchUserByUsername(strings.Join(r.Form["username"], ""))
+
+			if err == nil {
+				w.WriteHeader(http.StatusUnauthorized)
+			} else {
+				role := "user"
+				uuid, err = db.StoreUser(strings.Join(r.Form["username"], ""), strings.Join(r.Form["password"], ""), role)
+				if err != nil {
+					http.Error(w, http.StatusText(500), 500)
+				}
+				log.Println("uuid: " + uuid)
+
+				authTokenString, refreshTokenString, csrfSecret, err := myJwt.CreateNewTokens(uuid, role)
+				if err != nil {
+					http.Error(w, http.StatusText(500), 500)
+				}
+
+				setAuthRefreshCookies(&w, authTokenString, refreshTokenString)
+				w.Header().Set("X-CSRF-Token", csrfSecret)
+				w.WriteHeader(http.StatusOK)
+			}
 		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	case "/logout":
+		nullifyTokenCookies(&w, r)
+		http.Redirect(w, r, "/login", 302)
 	case "/deletUser":
 	default:
 	}

@@ -6,8 +6,7 @@ import (
 
 	"github.com/alphadev97.com/go-csrf/db"
 	"github.com/alphadev97.com/go-csrf/db/models"
-	"github.com/dgrijalva/jwt-go"
-	jwt "github.com/gdrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 )
 
 const (
