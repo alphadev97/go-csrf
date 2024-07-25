@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alphadev97.com/go-csrf/server/middleware/myJwt"
+	"github.com/alphadev97.com/go-csrf/server/templates"
 	"github.com/justinas/alice"
 )
 
@@ -38,6 +39,9 @@ func authHandler(next http.Handler) http.Handler {
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/restricted":
+		csrfSecret := grabCsrfFromReq(r)
+		templates.RenderTemplate(w, "restricted", &templates.RestrictedPage{csrfSecret, "Hello Alpha"})
+
 	case "/login":
 		switch r.Method {
 		case "GET":
