@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"log"
 
 	"github.com/alphadev97.com/go-csrf/db/models"
 	"github.com/alphadev97.com/go-csrf/randomstrings"
@@ -65,18 +66,47 @@ func FetchUserByUsername(username string) (models.User, string, error) {
 }
 
 func StoreRefreshToken() (jti string, err error) {
+	jti, err = randomstrings.GenerateRandomString(32)
+	if err != nil {
+		return jti, err
+	}
 
+	for refreshToken[jti] != "" {
+		jti, err = randomstrings.GenerateRandomString(32)
+		if err != nil {
+			return jti, err
+		}
+	}
+
+	refreshToken[jti] = "valid"
+
+	return jti, err
 }
 
-func DeleteRefreshToken()
+func DeleteRefreshToken(jti string) {
+	delete(refreshToken, jti)
+}
 
-func CheckAndRefreshTokens()
+func CheckAndRefreshTokens(jti string) bool {
+	return refreshToken[jti] != ""
+}
 
-func LogUserIn()
+func LogUserIn(username string, password string) (models.User, string, error) {
+	user, uuid, userErr := FetchUserByUsername(username)
+	log.Println(user, uuid, userErr)
+
+	if userErr != nil {
+		return models.User{}, "", userErr
+	}
+
+	return user, uuid, checkPasswordAgainstHash(user.PasswordHash, password)
+}
 
 func generateBcryptHash(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(hash[:]), err
 }
 
-func checkPasswordAgainstHash()
+func checkPasswordAgainstHash(hash string, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
