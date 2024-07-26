@@ -13,7 +13,7 @@ import (
 )
 
 func NewHandler() http.Handler {
-	return alice.New(recoverHandler, authHandler).ThenFunc(loginHandler)
+	return alice.New(recoverHandler, authHandler).ThenFunc(logicHandler)
 }
 
 func recoverHandler(next http.Handler) http.Handler {
@@ -79,7 +79,7 @@ func authHandler(next http.Handler) http.Handler {
 			log.Println("Successfully recreated jwt's")
 
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			setAuthRefreshCookies(&w, authTokenString, refreshTOkenString)
+			setAuthAndRefreshCookies(&w, authTokenString, refreshTOkenString)
 			w.Header().Set("X-CSRF-Token", csrfSecret)
 
 		default:
@@ -91,7 +91,7 @@ func authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func loginHandler(w http.ResponseWriter, r *http.Request) {
+func logicHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/restricted":
 		csrfSecret := grabCsrfFromReq(r)
@@ -100,8 +100,30 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	case "/login":
 		switch r.Method {
 		case "GET":
+			templates.RenderTemplate(w, "login", &templates.LoginPage{false, ""})
 		case "POST":
+			r.ParseForm()
+			log.Println(r.Form)
+
+			user, uuid, loginErr := db.LogUserIn(strings.Join(r.Form["username"], ""), strings.Join(r.Form["password"], ""))
+			log.Println(user, uuid, loginErr)
+
+			if loginErr != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+			} else {
+				authTokenString, refreshTokenString, csrfSecret, err := myJwt.CreateNewTokens(uuid, user.Role)
+				if err != nil {
+					http.Error(w, http.StatusText(500), 500)
+				}
+
+				setAuthAndRefreshCookies(&w, authTokenString, refreshTokenString)
+				w.Header().Set("X-CSRF-Token", csrfSecret)
+
+				w.WriteHeader(http.StatusOK)
+			}
+
 		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	case "/register":
 		switch r.Method {
@@ -128,7 +150,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, http.StatusText(500), 500)
 				}
 
-				setAuthRefreshCookies(&w, authTokenString, refreshTokenString)
+				setAuthAndRefreshCookies(&w, authTokenString, refreshTokenString)
 				w.Header().Set("X-CSRF-Token", csrfSecret)
 				w.WriteHeader(http.StatusOK)
 			}
@@ -139,7 +161,37 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		nullifyTokenCookies(&w, r)
 		http.Redirect(w, r, "/login", 302)
 	case "/deletUser":
+		log.Println("Deleting the user")
+		AuthCookie, authErr := r.Cookie("AuthToken")
+		if authErr == http.ErrNoCookie {
+			log.Println("Unauthorized attempt! not auth cookie")
+			nullifyTokenCookies(&w, r)
+			http.Redirect(w, r, "/login", 302)
+			return
+		} else if authErr != nil {
+			log.Panic("panic:%+v", authErr)
+			nullifyTokenCookies(&w, r)
+			http.Error(w, http.StatusText(500), 500)
+			return
+		}
+
+		uuid, uuidErr := myJwt.GrabUUID(AuthCookie.Value)
+
+		if uuidErr != nil {
+			log.Panic("Panic: %+v", uuidErr)
+			nullifyTokenCookies(&w, r)
+			http.Error(w, http.StatusText(500), 500)
+			return
+		}
+
+		db.DeleteUser(uuid)
+
+		nullifyTokenCookies(&w, r)
+
+		http.Redirect(w, r, "/register", 302)
+
 	default:
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -173,7 +225,7 @@ func nullifyTokenCookies(w *http.ResponseWriter, r *http.Request) {
 	myJwt.RevokeRefreshToken(RefreshCookie.Value)
 }
 
-func setAuthRefreshCookies(w *http.ResponseWriter, authTokenString string, refreshTokenString string) {
+func setAuthAndRefreshCookies(w *http.ResponseWriter, authTokenString string, refreshTokenString string) {
 	authCookie := http.Cookie{
 		Name:     "AuthToken",
 		Value:    authTokenString,

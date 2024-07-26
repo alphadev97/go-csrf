@@ -17,8 +17,8 @@ type RegisterPage struct {
 }
 
 type RestrictedPage struct {
-	BAlertUser bool
-	AlertMsg   string
+	CsrfSecret    string
+	SecretMessage string
 }
 
 var templates = template.Must(template.ParseFiles("./server/templates/templateFiles/login.tmpl", "./server/templates/templateFiles/register.tmpl", "./server/templates/templateFiles/restricted.tmpl"))

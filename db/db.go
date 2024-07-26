@@ -41,7 +41,7 @@ func StoreUser(username string, password string, role string) (uuid string, err 
 
 }
 
-func DeleteUser(uuid string) (models.User, error) {
+func DeleteUser(uuid string) {
 	delete(users, uuid)
 }
 
