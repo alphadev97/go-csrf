@@ -169,8 +169,32 @@ func createRefreshTokenString(uuid string, role string, csrfString string) (refr
 	return
 }
 
-func updateRefreshTokenExp() {
+func updateRefreshTokenExp(oldRefreshTokenString string) (newRefreshTokenString string, err error) {
+	jwt.ParseWithClaims(oldRefreshTokenString, &models.TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return verifyKey, nil
+	})
 
+	oldRefreshTokenClaims, ok := refreshToken.Claims.(*models.TokenClaims)
+	if !ok {
+		return
+	}
+
+	refreshTokenExp := time.Now().Add(models.RefreshTokenValidTime).Unix()
+
+	refreshClaims := models.TokenClaims{
+		jwt.StandardClaims{
+			Id:        oldRefreshTokenClaims.StandardClaims.Id,
+			Subject:   oldRefreshTokenClaims.StandardClaims.Subject,
+			ExpiresAt: refreshTokenExp,
+		},
+		oldRefreshTokenClaims.Role,
+		oldRefreshTokenClaims.Csrf,
+	}
+
+	refreshJwt := jwt.NewWithClaims(jwt.GetSigningMethod("RS256"), refreshClaims)
+
+	newRefreshTokenString, err = refreshJwt.SignedString(signkey)
+	return
 }
 
 func updateAuthTokenString() {
@@ -185,4 +209,15 @@ func updateRefreshTokenCsrf() {
 
 }
 
-func GrabUUID() {}
+func GrabUUID(authTokenString string) (string, error) {
+	authToken, _ := jwt.ParseWithClaims(authTokenString, &models.TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return "", errors.New("Error fetching claims")
+	})
+
+	authTokenClaims, ok := authToken.Claims.(*models.TokenClaims)
+	if !ok {
+		return "", errors.New("error fetching claims")
+	}
+
+	return authTokenClaims.StandardClaims.Subject, nil
+}
