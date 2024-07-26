@@ -96,7 +96,37 @@ func CheckAndRefreshTokens(oldAuthTokenString string, oldRefreshTokenString stri
 		newAuthTokenString = oldAuthTokenString
 
 		return
+	} else if ve, ok := err.(*jwt.ValidationError); ok {
+		log.Println("Auth token is not valid")
+		if ve.Errors&(jwt.ValidationErrorExpired) != 0 {
+			log.Println("Auth token is expired")
+
+			newAuthTokenString, newCsrfSecret, err = updateAuthTokenString(oldRefreshTokenString, oldAuthTokenString)
+			if err != nil {
+				return
+			}
+
+			newRefreshTokenString, err = updateRefreshTokenExp(oldRefreshTokenString)
+			if err != nil {
+				return
+			}
+
+			newRefreshTokenString, err = updateRefreshTokenCsrf(newRefreshTokenString, newCsrfSecret)
+			return
+
+		} else {
+			log.Println("error in auth token")
+			err = errors.New("error in auth token")
+			return
+		}
+	} else {
+		log.Println("error in auth token")
+		err = errors.New("error in auth token")
+		return
 	}
+
+	err = errors.New("Unauthorized")
+	return
 
 }
 
