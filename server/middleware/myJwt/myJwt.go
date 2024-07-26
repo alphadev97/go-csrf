@@ -1,6 +1,8 @@
 package myJwt
 
 import (
+	"errors"
+	"log"
 	"os"
 	"time"
 
@@ -61,7 +63,40 @@ func CreateNewTokens(uuid string, role string) (authTokenString, refreshTokenStr
 
 }
 
-func CheckAndRefreshTokens() {
+func CheckAndRefreshTokens(oldAuthTokenString string, oldRefreshTokenString string, oldCsrfSecret string) (newAuthTokenString, newRefreshTokenString, newCsrfSecret string, err error) {
+
+	if oldCsrfSecret == "" {
+		log.Println("No CSRF token!")
+		err = errors.New("Unauthorized")
+		return
+	}
+
+	authToken, err := jwt.ParseWithClaims(oldAuthTokenString, &models.TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return varifykey, nil
+	})
+
+	authTokenClaims, ok := authToken.Claims.(*models.TokenClaims)
+	if !ok {
+		return
+	}
+
+	if oldCsrfSecret != authTokenClaims.Csrf {
+		log.Println("CSRF token doesn't match jwt")
+		err = errors.New("Unauthorized")
+		return
+	}
+
+	if authToken.Valid {
+		log.Println("Auth token is valid")
+
+		newCsrfSecret = authTokenClaims.Csrf
+
+		newRefreshTokenString, err = updateRefreshTokenExp(oldRefreshTokenString)
+
+		newAuthTokenString = oldAuthTokenString
+
+		return
+	}
 
 }
 
